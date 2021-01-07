@@ -12,9 +12,22 @@ import getpass
 import pyperclip
 import webbrowser
 
-
 # account class
 class account:
+
+    # alternate constructor if account is being created
+    # for the first time without y-values
+    @classmethod
+    def from_scratch(cls, name, user, url, n, sp):
+        cls.n = n
+        y1, y2 = cls.random_y(), cls.random_y()
+        return cls(name, user, url, y1, y2, n, sp)
+
+    # Calculates random y key
+    @classmethod
+    def random_y(cls):
+        return int(random.uniform(0, 1) * (10 ** cls.n))
+
     def __init__(self, name, user, url, y1, y2, n, sp):
         self.name = name
         self.user = user
@@ -37,9 +50,8 @@ class account:
         return s[len(s) - self.n: len(s)] + self.sp
 
 
-    # Calculates random y key
-    def random_y(self):
-        return int(random.uniform(0, 1) * (10 ** self.n))
+class AccountExistsError(Exception):
+    pass
 
 
 # Returns accounts dataframe
@@ -102,10 +114,50 @@ def get_acct():
     return
 
 
+def check_account_exists(acct: str) -> None:
+    accts = [i.lower() for i in df_accounts().index.to_list()]
+    if acct in accts:
+        raise AccountExistsError
+    return
+
+
 # Creates new account
-def new_acct():
-    # TODO:  code for new account
-    input('Under construction.  Press any key to continue...')
+def new_acct() -> None:
+    while True:
+        input_msg = ('Please input comma-separated account name, user, url'
+                     ', n, and sp values for the new account >>>')
+        acct_params = input(input_msg).replace(' ', '').split(',')
+        # validate inputs
+        try:
+            assert len(acct_params) == 5
+            acct_params[-2] = int(acct_params[-2])
+            check_account_exists(acct_params[0].lower())
+            acct = account.from_scratch(*acct_params)
+        except AssertionError:
+            print(f'Error: 5 parameters expected, {len(acct_params)}'
+                  ' received. Account cannot be created.')
+        except ValueError:
+            print('Error: Non-numeric value passed as N'
+                  ' parameter. Account cannot be created.')
+        except AccountExistsError:
+            print(f'Error: Account <{acct_params[0]}> already exists.')
+            # TODO add optional call to del_acct if user wants to replace
+            # existing account
+        else:
+            file_path = os.path.join(
+                os.path.dirname(os.path.realpath(__file__)), 'accounts.csv')
+            with open(file_path, 'a') as file:
+                file.write('\n' + ','.join(
+                    [str(i) for i in acct.__dict__.values()]))
+            print(f'New account <{acct_params[0]}> successfully added to'
+                  f' {file_path}. ')
+        finally:
+            # give user the option to exit if an error is experienced
+            # or to continue adding new accounts if succcessful
+            choice = input('Exit account creation? "Y" to exit or any key'
+                           ' to continue >>>').lower()
+            if choice == "y":
+                break
     return
 
 
