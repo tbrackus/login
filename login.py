@@ -55,38 +55,58 @@ class AccountExistsError(Exception):
 
 
 # Returns accounts dataframe
-def df_accounts():
+def df_accounts() -> pd.DataFrame:
     return pd.read_csv(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'accounts.csv'), index_col = 'NAME')
 
 
 # Gets key from user
-def get_key(txt):
+def get_key(txt: str) -> int:
     while True:
-        key = getpass.getpass('Enter ' + txt + ' >>> ')
+        key = getpass.getpass(f'Enter {txt} >>> ')
         if key.isnumeric():
             break
         else:
-            print('Error.  ' + txt + ' must be numeric.')
+            print(f'Error.  {txt} must be numeric.')
     return int(key)
 
 
+# Gets input from user
+# NOTE:  this can should we use this to streamline the new_acct and mod_acct user inputs?
+def get_input(txt: str, validate):
+    while True:
+        inpt = input('Enter {txt} >>>')
+        if txt.validate():
+            break
+        else:
+            print('Error.  {txt} is invalid.')
+        return inpt
+
+
 # Gets account hashword
-def get_hw(acct):
+def get_hw(acct: account) -> str:
     x1 = get_key('x1 key')
     x2 = get_key('x2 key')
     return acct.hashword(int(x1), int(x2))
 
 
 # Displays available accounts
-def display_accounts(df_accts):
+def display_accounts(df_accts: pd.DataFrame) -> None:
     print('Available Accounts:')
     for n in df_accts.index.values.tolist():
-        print('\t' + n)
+        print(f'\t{n}')
+    pass
+
+
+# Displays account properties
+def display_properties(acct: account) -> None:
+    print('Available properties:')
+    for key, value in acct.__dict__.items():
+        print(f'\t{key}:  {value}')
     pass
 
 
 # Selects account
-def sel_acct():
+def sel_acct() -> account:
     df_accts = df_accounts()
     while True:
         display_accounts(df_accts)
@@ -99,21 +119,22 @@ def sel_acct():
 
 
 # Gets account info
-def get_acct():
+def get_acct() -> None:
     print('Getting Account Info...')
     acct = sel_acct()
     webbrowser.open_new_tab(acct.url)
-    print('URL for <' + acct.name + '> is: ' + acct.url)
+    print(f'URL for <{acct.name}> is: {acct.url}')
     pyperclip.copy(acct.user)
-    print('Username for <' + acct.name + '> (' + acct.user + ') has been copied to the clipboard.')
+    print(f'Username for <{acct.name}> ({acct.user}) has been copied to the clipboard.')
     input('Press any key to continue...')
     hw = get_hw(acct)
     pyperclip.copy(hw)
-    print('Password for <' + acct.name + '> has been copied to the clipboard.')
+    print(f'Password for <{acct.name}> has been copied to the clipboard.')
     input('Press any key to continue...')
     return
 
 
+# Checks to see if account exists
 def check_account_exists(acct: str) -> None:
     accts = [i.lower() for i in df_accounts().index.to_list()]
     if acct in accts:
@@ -146,6 +167,8 @@ def new_acct() -> None:
         else:
             file_path = os.path.join(
                 os.path.dirname(os.path.realpath(__file__)), 'accounts.csv')
+            
+            # TODO:  break out write function to accommodate a brand new object but also updating an existing object?  Call from here and also from mod_acct block?
             with open(file_path, 'a') as file:
                 file.write('\n' + ','.join(
                     [str(i) for i in acct.__dict__.values()]))
@@ -155,28 +178,38 @@ def new_acct() -> None:
             # give user the option to exit if an error is experienced
             # or to continue adding new accounts if succcessful
             choice = input('Exit account creation? "Y" to exit or any key'
-                           ' to continue >>>').lower()
+                           ' to continue >>> ').lower()
             if choice == "y":
                 break
     return
 
 
 # Modifies existing account
-def mod_acct():
-    # TODO:  code for modify account
-    input('Under construction.  Press any key to continue...')
+def mod_acct() -> None:
+    print('Modify Existing Account...')
+    acct = sel_acct()
+    while True:
+        display_properties(acct)
+        a = input('Enter property to modify >>> ').lower()
+        if a in acct.__dict__:
+            break
+        input('Error accessing property.  Press any key to continue...')
+    val = input(f'Enter new value for {a} >>> ').lower()
+    setattr(acct, a, val)
+    # TODO:  pass acct to separate write function to update csv file.
+    input('Account has been successfully modified.  Press any key to continue...')
     return
 
 
 # Deletes account
-def del_acct():
+def del_acct() -> None:
     # TODO:  code for delete account
     input('Under construction.  Press any key to continue...')
     return
 
 
 # Main method to clear screen and restart program
-def restart(c):
+def restart(c) -> None:
     if c == 'e':
         os.system('cls')
         return
@@ -189,7 +222,7 @@ def restart(c):
 
 
 # Prints commands to screen and asks for input
-def cmds():
+def cmds() -> None:
     os.system('cls')
     print('\n**********\tWELCOME TO THE LOGIN TOOL!\t**********\n\n')
     print('Available Commands:\n')
