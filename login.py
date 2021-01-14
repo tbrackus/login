@@ -5,6 +5,7 @@ This module contains the main command prompt for the password vault.
 '''
 
 import os
+import csv
 import pandas as pd
 import hashlib
 import random
@@ -59,6 +60,31 @@ def df_accounts() -> pd.DataFrame:
     return pd.read_csv(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'accounts.csv'), index_col = 'NAME')
 
 
+# Writes account to csv file
+def update_csv(acct: account) -> None:
+    file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'accounts.csv')
+    
+    with open(file_path, 'r') as file:
+        reader = csv.reader(file)
+        rows = list(reader)
+        row = [str(i) for i in acct.__dict__.values()]
+
+        # Determine if new line needs to be written, otherwise update line
+        newfile = True
+        for i in range(len(rows)):
+            if rows[i][0] == acct.name:
+                rows[i] = row
+                newfile = False
+                break
+        if newfile:
+            rows.append(row)
+
+    with open(file_path, 'w', newline = '') as file:
+        writer = csv.writer(file)
+        writer.writerows(rows)
+    return
+
+
 # Gets key from user
 def get_key(txt: str) -> int:
     while True:
@@ -68,18 +94,6 @@ def get_key(txt: str) -> int:
         else:
             print(f'Error.  {txt} must be numeric.')
     return int(key)
-
-
-# Gets input from user
-# NOTE:  this can should we use this to streamline the new_acct and mod_acct user inputs?
-def get_input(txt: str, validate):
-    while True:
-        inpt = input('Enter {txt} >>>')
-        if txt.validate():
-            break
-        else:
-            print('Error.  {txt} is invalid.')
-        return inpt
 
 
 # Gets account hashword
@@ -92,7 +106,7 @@ def get_hw(acct: account) -> str:
 # Displays available accounts
 def display_accounts(df_accts: pd.DataFrame) -> None:
     print('Available Accounts:')
-    for n in df_accts.index.values.tolist():
+    for n in df_accts.index.tolist():
         print(f'\t{n}')
     pass
 
@@ -114,8 +128,8 @@ def sel_acct() -> account:
         if a in df_accts.index.values:
             break
         input('Error accessing account.  Press any key to continue...')
-    acct = df_accts.loc[a]
-    return account(a, acct.USER, acct.URL, acct.Y1, acct.Y2, acct.N, acct.SP)
+    df_acct = df_accts.loc[a]
+    return account(a, df_acct.USER, df_acct.URL, df_acct.Y1, df_acct.Y2, df_acct.N, df_acct.SP)
 
 
 # Gets account info
@@ -144,10 +158,11 @@ def check_account_exists(acct: str) -> None:
 
 # Creates new account
 def new_acct() -> None:
-    while True:
-        input_msg = ('Please input comma-separated account name, user, url'
-                     ', n, and sp values for the new account >>>')
+    restart = True
+    while restart:
+        input_msg = ('Please input comma-separated account name, user, url, n, and sp values for the new account >>>')
         acct_params = input(input_msg).replace(' ', '').split(',')
+
         # validate inputs
         try:
             assert len(acct_params) == 5
@@ -155,32 +170,21 @@ def new_acct() -> None:
             check_account_exists(acct_params[0].lower())
             acct = account.from_scratch(*acct_params)
         except AssertionError:
-            print(f'Error: 5 parameters expected, {len(acct_params)}'
-                  ' received. Account cannot be created.')
+            print(f'Error: 5 parameters expected, {len(acct_params)} received. Account cannot be created.')
+            restart = True
         except ValueError:
-            print('Error: Non-numeric value passed as N'
-                  ' parameter. Account cannot be created.')
+            print('Error: Non-numeric value passed as N parameter. Account cannot be created.')
+            restart = True
         except AccountExistsError:
             print(f'Error: Account <{acct_params[0]}> already exists.')
+            restart = True
             # TODO add optional call to del_acct if user wants to replace
             # existing account
         else:
-            file_path = os.path.join(
-                os.path.dirname(os.path.realpath(__file__)), 'accounts.csv')
-            
-            # TODO:  break out write function to accommodate a brand new object but also updating an existing object?  Call from here and also from mod_acct block?
-            with open(file_path, 'a') as file:
-                file.write('\n' + ','.join(
-                    [str(i) for i in acct.__dict__.values()]))
-            print(f'New account <{acct_params[0]}> successfully added to'
-                  f' {file_path}. ')
-        finally:
-            # give user the option to exit if an error is experienced
-            # or to continue adding new accounts if succcessful
-            choice = input('Exit account creation? "Y" to exit or any key'
-                           ' to continue >>> ').lower()
-            if choice == "y":
-                break
+            restart = False
+    
+    update_csv(acct)
+    input(f'New account <{acct_params[0]}> successfully added.  Press any key to continue...')
     return
 
 
@@ -194,10 +198,10 @@ def mod_acct() -> None:
         if a in acct.__dict__:
             break
         input('Error accessing property.  Press any key to continue...')
-    val = input(f'Enter new value for {a} >>> ').lower()
+    val = input(f'Enter new value for {a} >>> ')
     setattr(acct, a, val)
-    # TODO:  pass acct to separate write function to update csv file.
-    input('Account has been successfully modified.  Press any key to continue...')
+    update_csv(acct)
+    input(f'<{acct.name}> account has been successfully modified.  Press any key to continue...')
     return
 
 
