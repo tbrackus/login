@@ -19,9 +19,11 @@ class account:
     # alternate constructor if account is being created
     # for the first time without y-values
     @classmethod
-    def from_scratch(cls, name, user, url, n, sp):
+    def from_scratch(cls, name, user, url, n, sp=''):
+        n = int(n)
         cls.n = n
         y1, y2 = cls.random_y(), cls.random_y()
+        delattr(account, 'n')  # seems prudent to remove the class attr
         return cls(name, user, url, y1, y2, n, sp)
 
     # Calculates random y key
@@ -29,7 +31,7 @@ class account:
     def random_y(cls):
         return int(random.uniform(0, 1) * (10 ** cls.n))
 
-    def __init__(self, name, user, url, y1, y2, n, sp):
+    def __init__(self, name, user, url, y1, y2, n, sp=''):
         self.name = name
         self.user = user
         self.url = url
@@ -59,29 +61,35 @@ class AccountExistsError(Exception):
 def df_accounts() -> pd.DataFrame:
     return pd.read_csv(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'accounts.csv'), index_col = 'NAME')
 
+def read_csv_as_list(path: str) -> list:
+    with open(path, 'r') as file:
+        reader = csv.reader(file)
+        return list(reader)
+
+def write_list_to_csv(path: str, data: list) -> None:
+    with open(path, 'w', newline = '') as file:
+        writer = csv.writer(file)
+        writer.writerows(data)
+        return
 
 # Writes account to csv file
 def update_csv(acct: account) -> None:
     file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'accounts.csv')
-    
-    with open(file_path, 'r') as file:
-        reader = csv.reader(file)
-        rows = list(reader)
-        row = [str(i) for i in acct.__dict__.values()]
 
-        # Determine if new line needs to be written, otherwise update line
-        newfile = True
-        for i in range(len(rows)):
-            if rows[i][0] == acct.name:
-                rows[i] = row
-                newfile = False
-                break
-        if newfile:
-            rows.append(row)
+    rows = read_csv_as_list(file_path)
+    row = [str(i) for i in acct.__dict__.values()]
 
-    with open(file_path, 'w', newline = '') as file:
-        writer = csv.writer(file)
-        writer.writerows(rows)
+    # Determine if new line needs to be written, otherwise update line
+    newfile = True
+    for i in range(len(rows)):
+        if rows[i][0] == acct.name:
+            rows[i] = row
+            newfile = False
+            break
+    if newfile:
+        rows.append(row)
+
+    write_list_to_csv(file_path, rows)
     return
 
 
@@ -150,7 +158,7 @@ def get_acct() -> None:
 
 # Checks to see if account exists
 def check_account_exists(acct: str) -> None:
-    accts = [i.lower() for i in df_accounts().index.to_list()]
+    accts = [i.lower() for i in df_accounts().index]
     if acct in accts:
         raise AccountExistsError
     return
@@ -159,32 +167,23 @@ def check_account_exists(acct: str) -> None:
 # Creates new account
 def new_acct() -> None:
     restart = True
+    msg = 'Press any key to continue...'
     while restart:
-        input_msg = ('Please input comma-separated account name, user, url, n, and sp values for the new account >>>')
+        input_msg = ('Enter comma-separated account name, user, url, n, and optional sp values for the new account >>>')
         acct_params = input(input_msg).replace(' ', '').split(',')
-
-        # validate inputs
+        name = acct_params[0]
         try:
-            assert len(acct_params) == 5
-            acct_params[-2] = int(acct_params[-2])
-            check_account_exists(acct_params[0].lower())
             acct = account.from_scratch(*acct_params)
-        except AssertionError:
-            print(f'Error: 5 parameters expected, {len(acct_params)} received. Account cannot be created.')
-            restart = True
-        except ValueError:
-            print('Error: Non-numeric value passed as N parameter. Account cannot be created.')
-            restart = True
+            check_account_exists(name)
+        except (TypeError, ValueError):
+            input(f'Bad account parameter input. {msg}')
         except AccountExistsError:
-            print(f'Error: Account <{acct_params[0]}> already exists.')
-            restart = True
-            # TODO add optional call to del_acct if user wants to replace
-            # existing account
+            print(f'Account <{name}> already exists. {msg}')
+            return
         else:
             restart = False
-    
     update_csv(acct)
-    input(f'New account <{acct_params[0]}> successfully added.  Press any key to continue...')
+    input(f'New account <{name}> successfully added. {msg}')
     return
 
 
@@ -207,8 +206,27 @@ def mod_acct() -> None:
 
 # Deletes account
 def del_acct() -> None:
-    # TODO:  code for delete account
-    input('Under construction.  Press any key to continue...')
+    df_accts = df_accounts()
+    msg = 'Press any key to continue...'
+    while True:
+        display_accounts(df_accts)
+        name = input('Enter account to delete >>> ').lower()
+        if name in df_accts.index:
+            break
+        input(f'Error accessing account. {msg}')
+
+    file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'accounts.csv')
+
+    # === Option 1 ===
+    # df_accts.drop(index=name, inplace=True)
+    # df_accts.to_csv(file_path)
+
+    # === Option 2 ===
+    idx = df_accts.index.get_loc(name) + 1  # +1 to skip col header
+    rows = read_csv_as_list(file_path)
+    del rows[idx]
+    write_list_to_csv(file_path, rows)
+    input(f'Account <{name}> successfully deleted. {msg}')
     return
 
 
