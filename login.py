@@ -6,12 +6,12 @@ This module contains the main command prompt for the password vault.
 
 import os
 import csv
-import pandas as pd
 import hashlib
 import random
 import getpass
 import pyperclip
 import webbrowser
+
 
 # account class
 class account:
@@ -21,7 +21,8 @@ class account:
     @classmethod
     def from_scratch(cls, name, user, url, n, sp=''):
         n = int(n)
-        cls.n = n
+        cls.n = n  # TODO:  Not sure what this row does.  Shouldn't the 'n' be unique to each account?  What if one account supplier allows 12 max characters, and another allows 16?
+        # TODO:  verify that setting both y1 and y2 in one line avoid keys that are close to one another?
         y1, y2 = cls.random_y(), cls.random_y()
         delattr(account, 'n')  # seems prudent to remove the class attr
         return cls(name, user, url, y1, y2, n, sp)
@@ -57,26 +58,27 @@ class AccountExistsError(Exception):
     pass
 
 
-# Returns accounts dataframe
-def df_accounts() -> pd.DataFrame:
-    return pd.read_csv(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'accounts.csv'), index_col = 'NAME')
+# Returns csv file path
+def file_path() -> str:
+    return os.path.join(os.path.dirname(os.path.realpath(__file__)), 'accounts.csv')
 
-def read_csv_as_list(path: str) -> list:
-    with open(path, 'r') as file:
+
+def read_csv_as_list() -> list:
+    with open(file_path(), 'r') as file:
         reader = csv.reader(file)
         return list(reader)
 
-def write_list_to_csv(path: str, data: list) -> None:
-    with open(path, 'w', newline = '') as file:
+
+def write_list_to_csv(data: list) -> None:
+    with open(file_path(), 'w', newline = '') as file:
         writer = csv.writer(file)
-        writer.writerows(data)
+        writer.writerows(sorted(data[0:]))
         return
+
 
 # Writes account to csv file
 def update_csv(acct: account) -> None:
-    file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'accounts.csv')
-
-    rows = read_csv_as_list(file_path)
+    rows = read_csv_as_list()
     row = [str(i) for i in acct.__dict__.values()]
 
     # Determine if new line needs to be written, otherwise update line
@@ -89,7 +91,7 @@ def update_csv(acct: account) -> None:
     if newfile:
         rows.append(row)
 
-    write_list_to_csv(file_path, rows)
+    write_list_to_csv(rows)
     return
 
 
@@ -112,10 +114,10 @@ def get_hw(acct: account) -> str:
 
 
 # Displays available accounts
-def display_accounts(df_accts: pd.DataFrame) -> None:
+def display_accounts(accts: list) -> None:
     print('Available Accounts:')
-    for n in df_accts.index.tolist():
-        print(f'\t{n}')
+    for a in accts[1:]:
+        print(f'\t{a[0]}')
     pass
 
 
@@ -129,15 +131,18 @@ def display_properties(acct: account) -> None:
 
 # Selects account
 def sel_acct() -> account:
-    df_accts = df_accounts()
-    while True:
-        display_accounts(df_accts)
+    accts = read_csv_as_list()
+    restart = True
+    while restart:
+        display_accounts(accts)
         a = input('Enter account name >>> ').lower()
-        if a in df_accts.index.values:
-            break
-        input('Error accessing account.  Press any key to continue...')
-    df_acct = df_accts.loc[a]
-    return account(a, df_acct.USER, df_acct.URL, df_acct.Y1, df_acct.Y2, df_acct.N, df_acct.SP)
+        for i in range(len(accts)):
+            if accts[i][0] == a:
+                restart = False
+                break
+        if restart:
+            input('Error accessing account.  Press any key to continue...')
+    return account(accts[i][0], accts[i][1], accts[i][2], int(accts[i][3]), int(accts[i][4]), int(accts[i][5]), accts[i][6])
 
 
 # Gets account info
@@ -158,7 +163,7 @@ def get_acct() -> None:
 
 # Checks to see if account exists
 def check_account_exists(acct: str) -> None:
-    accts = [i.lower() for i in df_accounts().index]
+    accts = [i[0] for i in read_csv_as_list()]
     if acct in accts:
         raise AccountExistsError
     return
@@ -206,27 +211,23 @@ def mod_acct() -> None:
 
 # Deletes account
 def del_acct() -> None:
-    df_accts = df_accounts()
+    accts = read_csv_as_list()
     msg = 'Press any key to continue...'
     while True:
-        display_accounts(df_accts)
+        display_accounts(accts)
         name = input('Enter account to delete >>> ').lower()
-        if name in df_accts.index:
+        if name in [i[0] for i in accts]:
             break
         input(f'Error accessing account. {msg}')
 
-    file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'accounts.csv')
-
-    # === Option 1 ===
-    # df_accts.drop(index=name, inplace=True)
-    # df_accts.to_csv(file_path)
-
-    # === Option 2 ===
-    idx = df_accts.index.get_loc(name) + 1  # +1 to skip col header
-    rows = read_csv_as_list(file_path)
-    del rows[idx]
-    write_list_to_csv(file_path, rows)
-    input(f'Account <{name}> successfully deleted. {msg}')
+    for i in range(len(accts)):
+        if accts[i][0] == name:
+            break
+    confirm = input(f'Are you sure you wish to delete {name} account?  Enter <y> to confirm or any key to cancel.').lower()
+    if confirm == 'y':
+        del accts[i]
+        write_list_to_csv(accts)
+        input(f'Account <{name}> successfully deleted. {msg}')
     return
 
 
