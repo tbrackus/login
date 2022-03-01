@@ -17,44 +17,49 @@ import webbrowser
 class account:
 
     # alternate constructor if account is being created
-    # for the first time without y-values
+    # for the first time without x,y-values
     @classmethod
-    def from_scratch(cls, name, user, url, n, sp=''):
+    def from_scratch(cls, name, desc, user, url, n, sp=''):
         n = int(n)
         cls.n = n  # TODO:  Not sure what this row does.  Shouldn't the 'n' be unique to each account?  What if one account supplier allows 12 max characters, and another allows 16?
-        # TODO:  verify that setting both y1 and y2 in one line avoid keys that are close to one another?
-        y1, y2 = cls.random_y(), cls.random_y()
+        x1 = cls.random_n()
+        y1 = cls.random_n()
         delattr(account, 'n')  # seems prudent to remove the class attr
-        return cls(name, user, url, y1, y2, n, sp)
+        return cls(name, desc, user, url, x1, y1, n, sp)
 
     # Calculates random y key
     @classmethod
-    def random_y(cls):
+    def random_n(cls):
         return int(random.uniform(0, 1) * (10 ** cls.n))
 
-    def __init__(self, name, user, url, y1, y2, n, sp=''):
+    def __init__(self, name, desc, user, url, x1, y1, n, sp=''):
         self.name = name
+        self.desc = desc
         self.user = user
         self.url = url
+        self.x1 = x1
         self.y1 = y1
-        self.y2 = y2
         self.n = n
         self.sp = sp
 
 
     # Calculates account key
-    def key(self, x1, x2):
-        return self.y1 - (self.y2 - self.y1) / (x2 - x1) * x1
+    def key(self, x2, y2):
+        return self.y1 - (y2 - self.y1) / (x2 - self.x1) * self.x1
 
 
     # Returns hashword
-    def hashword(self, x1, x2):
-        k = str(int(self.key(x1, x2) * (10 ** self.n)))
-        s = str(hashlib.sha256(k.encode("utf-8")).digest())
+    def hashword(self, x2, y2):
+        k = str(int(self.key(x2, y2) * (10 ** self.n)))
+        s = str(hashlib.sha256(k.encode("utf-8")).hexdigest())
         return s[len(s) - self.n: len(s)] + self.sp
 
 
 class AccountExistsError(Exception):
+    pass
+
+
+class ExitMethodError(Exception):
     pass
 
 
@@ -108,16 +113,16 @@ def get_key(txt: str) -> int:
 
 # Gets account hashword
 def get_hw(acct: account) -> str:
-    x1 = get_key('x1 key')
-    x2 = get_key('x2 key')
-    return acct.hashword(int(x1), int(x2))
+    x2 = get_key('x key')
+    y2 = get_key('y key')
+    return acct.hashword(int(x2), int(y2))
 
 
 # Displays available accounts
 def display_accounts(accts: list) -> None:
     print('Available Accounts:')
-    for a in accts[1:]:
-        print(f'\t{a[0]}')
+    for a in accts[0:]:
+        print(f'\t{a[0].ljust(30)}{a[1]}')
     pass
 
 
@@ -125,7 +130,7 @@ def display_accounts(accts: list) -> None:
 def display_properties(acct: account) -> None:
     print('Available properties:')
     for key, value in acct.__dict__.items():
-        print(f'\t{key}:  {value}')
+        print(f'\t{key.ljust(30)}  {value}')
     pass
 
 
@@ -137,23 +142,29 @@ def sel_acct() -> account:
         display_accounts(accts)
         a = input('Enter account name >>> ').lower()
         for i in range(len(accts)):
-            if accts[i][0] == a:
+            if accts[i][0].lower() == a:
                 restart = False
                 break
         if restart:
-            input('Error accessing account.  Press any key to continue...')
-    return account(accts[i][0], accts[i][1], accts[i][2], int(accts[i][3]), int(accts[i][4]), int(accts[i][5]), accts[i][6])
+            c = input('Error accessing account.  Enter <c> to cancel or any key to continue...')
+            if c == 'c':
+                raise ExitMethodError
+    return account(accts[i][0], accts[i][1], accts[i][2], accts[i][3], int(accts[i][4]), int(accts[i][5]), int(accts[i][6]), accts[i][7])
 
 
 # Gets account info
 def get_acct() -> None:
     print('Getting Account Info...')
-    acct = sel_acct()
-    webbrowser.open_new_tab(acct.url)
+    try:
+         acct = sel_acct()
+    except ExitMethodError:
+        return
     print(f'URL for <{acct.name}> is: {acct.url}')
     pyperclip.copy(acct.user)
     print(f'Username for <{acct.name}> ({acct.user}) has been copied to the clipboard.')
-    input('Press any key to continue...')
+    c = input('Do you wish to open the URL in a browser?  Enter <y> to proceed or any key to continue...')
+    if c == 'y':
+        webbrowser.open_new_tab(acct.url)
     hw = get_hw(acct)
     pyperclip.copy(hw)
     print(f'Password for <{acct.name}> has been copied to the clipboard.')
@@ -172,16 +183,18 @@ def check_account_exists(acct: str) -> None:
 # Creates new account
 def new_acct() -> None:
     restart = True
-    msg = 'Press any key to continue...'
+    msg = 'Press key to continue...'
     while restart:
-        input_msg = ('Enter comma-separated account name, user, url, n, and optional sp values for the new account >>>')
+        input_msg = ('Enter comma-separated account name, description, user, url, n, and optional sp values for the new account >>>')
         acct_params = input(input_msg).replace(' ', '').split(',')
         name = acct_params[0]
         try:
             acct = account.from_scratch(*acct_params)
             check_account_exists(name)
         except (TypeError, ValueError):
-            input(f'Bad account parameter input. {msg}')
+            c = input(f'Bad account parameter input. {msg} Or enter <c> to cancel...')
+            if c == 'c':
+                return
         except AccountExistsError:
             print(f'Account <{name}> already exists. {msg}')
             return
@@ -195,13 +208,20 @@ def new_acct() -> None:
 # Modifies existing account
 def mod_acct() -> None:
     print('Modify Existing Account...')
-    acct = sel_acct()
+    try:
+        acct = sel_acct()
+    except ExitMethodError:
+        return
     while True:
         display_properties(acct)
-        a = input('Enter property to modify >>> ').lower()
+        a = input('Enter property to modify... Or enter <c> to cancel...').lower()
+        if a == 'c':
+            return
         if a in acct.__dict__:
             break
-        input('Error accessing property.  Press any key to continue...')
+        c = input('Error accessing property.  Enter <c> to cancel or any key to continue...')
+        if c == 'c':
+            return
     val = input(f'Enter new value for {a} >>> ')
     setattr(acct, a, val)
     update_csv(acct)
@@ -218,12 +238,14 @@ def del_acct() -> None:
         name = input('Enter account to delete >>> ').lower()
         if name in [i[0] for i in accts]:
             break
-        input(f'Error accessing account. {msg}')
+        c = input(f'Error accessing account. {msg} Or enter <c> to cancel...')
+        if c == 'c':
+            return
 
     for i in range(len(accts)):
         if accts[i][0] == name:
             break
-    confirm = input(f'Are you sure you wish to delete {name} account?  Enter <y> to confirm or any key to cancel.').lower()
+    confirm = input(f'Are you sure you wish to delete {name} account?  Enter <y> to confirm or any key to cancel...').lower()
     if confirm == 'y':
         del accts[i]
         write_list_to_csv(accts)
