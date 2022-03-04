@@ -21,16 +21,18 @@ class account:
     @classmethod
     def from_scratch(cls, name, desc, user, url, n, sp=''):
         n = int(n)
-        cls.n = n  # TODO:  Not sure what this row does.  Shouldn't the 'n' be unique to each account?  What if one account supplier allows 12 max characters, and another allows 16?
-        x1 = cls.random_n()
-        y1 = cls.random_n()
+        cls.n = n
+        x1 = cls.random_n(n)
+        y1 = cls.random_n(n)
         delattr(account, 'n')  # seems prudent to remove the class attr
         return cls(name, desc, user, url, x1, y1, n, sp)
 
-    # Calculates random y key
+
+    # Calculates random key
     @classmethod
-    def random_n(cls):
-        return int(random.uniform(0, 1) * (10 ** cls.n))
+    def random_n(cls, n):
+        return int(random.uniform(0, 1) * (10 ** n))
+
 
     def __init__(self, name, desc, user, url, x1, y1, n, sp=''):
         self.name = name
@@ -46,6 +48,11 @@ class account:
     # Calculates account key
     def key(self, x2, y2):
         return self.y1 - (y2 - self.y1) / (x2 - self.x1) * self.x1
+
+    # Regenerates keys
+    def regen_keys(self):
+        self.x1 = self.random_n(self.n)
+        self.y1 = self.random_n(self.n)
 
 
     # Returns hashword
@@ -222,8 +229,15 @@ def mod_acct() -> None:
         c = input('Error accessing property.  Enter <c> to cancel or any key to continue...')
         if c == 'c':
             return
-    val = input(f'Enter new value for {a} >>> ')
-    setattr(acct, a, val)
+    if a == 'x1' or a == 'y1':
+        y = input(f'Warning, you selected to modify {a}.  This command will regenerate both keys for {acct.name} and permanently change its password.  Enter <y> to proceed or press any key to cancel...')
+        if y == 'y':
+            acct.regen_keys()
+        else:
+            return
+    else:
+        val = input(f'Enter new value for {a} >>> ')
+        setattr(acct, a, val)
     update_csv(acct)
     input(f'<{acct.name}> account has been successfully modified.  Press any key to continue...')
     return
